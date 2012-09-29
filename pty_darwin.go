@@ -12,33 +12,42 @@ const (
 	sys_TIOCPTYGNAME = 0x40807453
 )
 
-// Opens a pty and its corresponding tty.
-func Open() (pty, tty *os.File, err error) {
-	p, err := os.OpenFile("/dev/ptmx", os.O_RDWR, 0)
+func OpenMaster() (pty *os.File, slaveName string, err error) {
+	p, err := os.OpenFile("/dev/ptmx", os.O_RDWR | os.O_SYNC, 0)
 	if err != nil {
-		return nil, nil, err
+		return nil, "", err
 	}
 
-	sname, err := ptsname(p)
+	slaveName, err = ptsname(p)
 	if err != nil {
-		return nil, nil, err
+		return nil, "", err
 	}
 
 	err = grantpt(p)
 	if err != nil {
-		return nil, nil, err
+		return nil, "", err
 	}
 
 	err = unlockpt(p)
 	if err != nil {
-		return nil, nil, err
+		return nil, "", err
 	}
 
-	t, err := os.OpenFile(sname, os.O_RDWR, 0)
+	return p, slaveName, nil
+}
+
+// Opens a pty and its corresponding tty.
+func Open() (pty, tty *os.File, err error) {
+	pty, slaveName, err := OpenMaster()
 	if err != nil {
 		return nil, nil, err
 	}
-	return p, t, nil
+
+	t, err := os.OpenFile(slaveName, os.O_RDWR | os.O_SYNC, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	return pty, t, nil
 }
 
 func ptsname(f *os.File) (string, error) {
